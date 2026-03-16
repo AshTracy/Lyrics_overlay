@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lyrics Overlay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Thèmes (Phase 5) ──────────────────────────────────────────────────── */
+    :root {
+      --bg:          rgba(10, 10, 14, 0.85);
+      --bg-hover:    rgba(255,255,255,0.04);
+      --accent:      #c8a96e;
+      --accent-dim:  rgba(200,169,110,0.22);
+      --accent-glow: rgba(200,169,110,0.08);
+      --text-h:      #f0ece4;
+      --text-m:      rgba(240,236,228,0.55);
+      --text-l:      rgba(240,236,228,0.28);
+      --border:      rgba(255,255,255,0.07);
+      --border-m:    rgba(255,255,255,0.12);
+      --radius:      14px;
+      --font-ui:     'DM Sans', sans-serif;
+      --font-lyrics: 'DM Serif Display', Georgia, serif;
+      --font-mono:   'JetBrains Mono', monospace;
+    }
+    [data-theme="light"] {
+      --bg:         rgba(248, 246, 241, 0.92);
+      --bg-hover:   rgba(0,0,0,0.04);
+      --accent:     #9a6f2e;
+      --accent-dim: rgba(154,111,46,0.15);
+      --text-h:     #1a1814;
+      --text-m:     rgba(26,24,20,0.55);
+      --text-l:     rgba(26,24,20,0.28);
+      --border:     rgba(0,0,0,0.08);
+      --border-m:   rgba(0,0,0,0.14);
+    }
+    [data-theme="minimal"] {
+      --bg:         rgba(0, 0, 0, 0.55);
+      --accent:     #ffffff;
+      --accent-dim: rgba(255,255,255,0.12);
+      --text-h:     #ffffff;
+      --text-m:     rgba(255,255,255,0.5);
+      --text-l:     rgba(255,255,255,0.22);
+      --border:     rgba(255,255,255,0.06);
+    }
+
+    html, body { width:100%; height:100%; background:transparent; overflow:hidden;
+                 -webkit-app-region:no-drag; user-select:none; }
+
+    /* ── App shell ─────────────────────────────────────────────────────────── */
+    #app {
+      width:100%; height:100%; display:flex; flex-direction:column;
+      background:var(--bg); border:1px solid var(--border);
+      border-radius:var(--radius);
+      backdrop-filter:blur(28px) saturate(160%);
+      -webkit-backdrop-filter:blur(28px) saturate(160%);
+      overflow:hidden; transition:background 0.35s;
+      position:relative;
+    }
+
+    /* ── Titlebar ──────────────────────────────────────────────────────────── */
+    #titlebar {
+      display:flex; align-items:center; gap:6px;
+      padding:7px 10px 5px; cursor:grab; flex-shrink:0;
+    }
+    #titlebar:active { cursor:grabbing; }
+
+    #cover {
+      width:28px; height:28px; border-radius:5px; flex-shrink:0;
+      background:var(--accent-dim); object-fit:cover; overflow:hidden;
+      display:flex; align-items:center; justify-content:center;
+      font-size:13px; color:var(--text-m);
+    }
+    #cover img { width:100%; height:100%; object-fit:cover; border-radius:5px; }
+
+    #track-info { flex:1; min-width:0; }
+    #track-title {
+      font-family:var(--font-ui); font-weight:500; font-size:11px;
+      color:var(--text-h); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    #track-artist {
+      font-family:var(--font-ui); font-weight:300; font-size:10px;
+      color:var(--text-m); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+
+    .ctrl-btn {
+      width:22px; height:22px; border-radius:50%; background:transparent; border:none;
+      color:var(--text-m); cursor:pointer; display:flex; align-items:center; justify-content:center;
+      font-size:11px; transition:color 0.15s, background 0.15s; flex-shrink:0;
+    }
+    .ctrl-btn:hover { color:var(--text-h); background:var(--bg-hover); }
+    .ctrl-btn.active { color:var(--accent); }
+
+    #source-badge {
+      font-family:var(--font-ui); font-size:9px; font-weight:500;
+      padding:2px 6px; border-radius:20px;
+      background:var(--accent-dim); color:var(--accent);
+      letter-spacing:0.05em; flex-shrink:0; text-transform:uppercase;
+      transition:background 0.3s, color 0.3s;
+    }
+    #source-badge.system { background:rgba(110,180,200,0.2); color:#6eb4c8; }
+
+    /* ── Barre de progression ──────────────────────────────────────────────── */
+    #progress-bar { height:2px; background:var(--border); flex-shrink:0; position:relative; cursor:pointer; }
+    #progress-fill { height:100%; background:var(--accent); width:0%; transition:width 0.1s linear; }
+
+    /* ── Zone paroles ──────────────────────────────────────────────────────── */
+    #lyrics-zone {
+      flex:1; overflow:hidden; padding:6px 18px 10px;
+      display:none; flex-direction:column; justify-content:center; gap:3px;
+    }
+    #lyrics-zone.visible { display:flex; }
+
+    .lyric-line {
+      font-family:var(--font-lyrics); font-size:var(--font-size, 18px);
+      line-height:1.35; color:var(--text-l);
+      transition:color 0.3s, font-size 0.2s, transform 0.2s, opacity 0.3s;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      cursor:pointer; border-radius:4px; padding:0 4px;
+      transform:translateY(0); opacity:0.4;
+    }
+    .lyric-line:hover { background:var(--bg-hover); }
+    .lyric-line.active {
+      color:var(--text-h); opacity:1;
+      font-style:italic; transform:translateY(0);
+    }
+    .lyric-line.next { color:var(--text-m); opacity:0.7; }
+
+    /* Taille active légèrement plus grande */
+    .lyric-line.active { font-size:calc(var(--font-size, 18px) + 3px); }
+
+    /* ── Status paroles ─────────────────────────────────────────────────────── */
+    #lyrics-status {
+      font-family:var(--font-ui); font-size:10px; color:var(--text-m);
+      padding:3px 18px; text-align:center; display:none; flex-shrink:0;
+    }
+    #lyrics-status.visible { display:block; }
+
+    /* ── État vide ──────────────────────────────────────────────────────────── */
+    #empty-state {
+      flex:1; display:flex; flex-direction:column;
+      align-items:center; justify-content:center; gap:8px; padding:16px;
+    }
+    #empty-icon { font-size:26px; opacity:0.3; }
+    #empty-text {
+      font-family:var(--font-ui); font-size:11px;
+      color:var(--text-m); text-align:center; line-height:1.6;
+    }
+    .pill-btn {
+      font-family:var(--font-ui); font-size:10px; font-weight:500;
+      padding:5px 14px; border-radius:20px;
+      background:var(--accent-dim); color:var(--accent);
+      border:1px solid rgba(200,169,110,0.25); cursor:pointer;
+      transition:background 0.15s; letter-spacing:0.04em;
+    }
+    .pill-btn:hover { background:rgba(200,169,110,0.35); }
+
+    /* ── Panneau paramètres (Phase 5) ───────────────────────────────────────── */
+    #settings-panel {
+      display:none; flex-direction:column; gap:0;
+      background:var(--bg); border-top:1px solid var(--border);
+      max-height:220px; overflow-y:auto; flex-shrink:0;
+    }
+    #settings-panel.open { display:flex; }
+
+    .settings-section {
+      padding:8px 12px 6px;
+      border-bottom:1px solid var(--border);
+    }
+    .settings-section:last-child { border-bottom:none; }
+    .settings-title {
+      font-family:var(--font-ui); font-size:9px; font-weight:500;
+      color:var(--text-m); text-transform:uppercase; letter-spacing:0.08em;
+      margin-bottom:6px;
+    }
+    .setting-row {
+      display:flex; align-items:center; gap:8px; margin-bottom:5px;
+    }
+    .setting-row label {
+      font-family:var(--font-ui); font-size:10px; color:var(--text-m);
+      flex:1; white-space:nowrap;
+    }
+    .setting-row input[type=range] {
+      flex:2; height:3px; accent-color:var(--accent); cursor:pointer;
+    }
+    .setting-row input[type=range]::-webkit-slider-thumb { cursor:pointer; }
+    .setting-row span.val {
+      font-family:var(--font-mono); font-size:9px; color:var(--text-m);
+      min-width:28px; text-align:right;
+    }
+
+    /* Boutons thème */
+    .theme-btns { display:flex; gap:4px; }
+    .theme-btn {
+      font-family:var(--font-ui); font-size:9px; font-weight:500;
+      padding:3px 8px; border-radius:10px; border:1px solid var(--border-m);
+      background:transparent; color:var(--text-m); cursor:pointer; transition:all 0.15s;
+    }
+    .theme-btn.active { background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
+
+    /* ── Offset synchro (Phase 4) ───────────────────────────────────────────── */
+    #offset-display {
+      font-family:var(--font-mono); font-size:9px; color:var(--accent);
+      min-width:40px; text-align:right;
+    }
+
+    /* ── Resize handle ──────────────────────────────────────────────────────── */
+    #resize-handle {
+      position:absolute; bottom:3px; right:4px;
+      width:11px; height:11px; cursor:nwse-resize;
+      opacity:0.25; font-size:9px; color:var(--text-m);
+      display:flex; align-items:center; justify-content:center;
+    }
+
+    /* ── Spinner fetch ──────────────────────────────────────────────────────── */
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .spinner { display:inline-block; animation:spin 0.9s linear infinite; }
+
+    /* ── Karaoké : ligne active animée ─────────────────────────────────────── */
+    @keyframes lyricPulse { 0%,100%{opacity:1} 50%{opacity:0.85} }
+    .lyric-line.active.playing { animation:lyricPulse 2s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+<div id="app" data-theme="dark">
+
+  <!-- Titlebar -->
+  <div id="titlebar">
+    <div id="cover">♪</div>
+    <div id="track-info">
+      <div id="track-title">Lyrics Overlay</div>
+      <div id="track-artist">Aucun morceau</div>
+    </div>
+    <span id="source-badge" style="display:none">LOCAL</span>
+    <button class="ctrl-btn" id="btn-open"     title="Ouvrir fichier">📂</button>
+    <button class="ctrl-btn" id="btn-play"     title="Play/Pause" style="display:none">▶</button>
+    <button class="ctrl-btn" id="btn-release"  title="Revenir à la détection système" style="display:none">⏏</button>
+    <button class="ctrl-btn" id="btn-settings" title="Paramètres">⚙</button>
+    <button class="ctrl-btn" id="btn-close"    title="Masquer">✕</button>
+  </div>
+
+  <!-- Progress -->
+  <div id="progress-bar"><div id="progress-fill"></div></div>
+
+  <!-- Status paroles -->
+  <div id="lyrics-status"></div>
+
+  <!-- Paroles -->
+  <div id="lyrics-zone">
+    <div class="lyric-line" id="line-prev" data-idx="-1"></div>
+    <div class="lyric-line active" id="line-curr" data-idx="0">♪</div>
+    <div class="lyric-line next"   id="line-next" data-idx="1"></div>
+  </div>
+
+  <!-- Empty state -->
+  <div id="empty-state">
+    <div id="empty-icon">🎵</div>
+    <div id="empty-text">Ouvrez un fichier audio local<br>ou lancez Spotify / Apple Music</div>
+    <button class="pill-btn" id="open-btn">Ouvrir un fichier</button>
+  </div>
+
+  <!-- Paramètres (Phase 5) -->
+  <div id="settings-panel">
+
+    <div class="settings-section">
+      <div class="settings-title">Apparence</div>
+      <div class="setting-row">
+        <label>Thème</label>
+        <div class="theme-btns">
+          <button class="theme-btn active" data-theme="dark">Sombre</button>
+          <button class="theme-btn"        data-theme="light">Clair</button>
+          <button class="theme-btn"        data-theme="minimal">Minimal</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <label>Opacité</label>
+        <input type="range" id="sl-opacity"  min="20" max="100" value="85">
+        <span class="val" id="vl-opacity">85%</span>
+      </div>
+      <div class="setting-row">
+        <label>Police</label>
+        <input type="range" id="sl-fontsize" min="12" max="32"  value="18">
+        <span class="val" id="vl-fontsize">18</span>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-title">Lecture</div>
+      <div class="setting-row">
+        <label>Décalage paroles</label>
+        <input type="range" id="sl-offset" min="-5000" max="5000" value="0" step="100">
+        <span id="offset-display">0.0s</span>
+      </div>
+      <div class="setting-row">
+        <label>Lignes visibles</label>
+        <div style="display:flex;gap:4px">
+          <button class="theme-btn" data-lines="1">1</button>
+          <button class="theme-btn active" data-lines="3">3</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-title">Comportement</div>
+      <div class="setting-row">
+        <label>Mode passthrough</label>
+        <input type="checkbox" id="cb-passthrough">
+      </div>
+      <div class="setting-row">
+        <label>Afficher pochette</label>
+        <input type="checkbox" id="cb-cover" checked>
+      </div>
+      <div class="setting-row" style="margin-top:6px">
+        <button class="pill-btn" id="btn-clear-cache" style="font-size:9px;padding:3px 10px">
+          Vider le cache paroles
+        </button>
+        <span id="cache-stats" style="font-family:var(--font-mono);font-size:9px;color:var(--text-m);margin-left:6px"></span>
+      </div>
+      <div class="setting-row" style="margin-top:4px;flex-direction:column;align-items:flex-start;gap:4px">
+        <div style="font-size:9px;color:var(--text-m);margin-bottom:2px">Dossier fichiers .lrc :</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="pill-btn" id="btn-open-lrc-folder" style="font-size:9px;padding:3px 10px">
+            📁 Ouvrir
+          </button>
+          <button class="pill-btn" id="btn-choose-lrc-folder" style="font-size:9px;padding:3px 10px">
+            📂 Changer…
+          </button>
+          <button class="pill-btn" id="btn-reset-lrc-folder" style="font-size:9px;padding:3px 10px">
+            ↩ Défaut
+          </button>
+        </div>
+        <div id="lrc-folder-path" style="font-family:var(--font-mono);font-size:8px;color:var(--text-m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;cursor:default"></div>
+      </div>
+      <div class="setting-row" style="margin-top:4px">
+        <button class="pill-btn" id="btn-diagnose" style="font-size:9px;padding:3px 10px;background:rgba(110,180,200,0.15);color:#6eb4c8;border-color:rgba(110,180,200,0.3)">
+          🔍 Tester la détection
+        </button>
+      </div>
+      <div class="setting-row" style="margin-top:6px;flex-direction:column;align-items:flex-start;gap:4px">
+        <div style="font-size:9px;color:var(--text-m)">Interface HTTP VLC :</div>
+        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:9px;color:var(--text-m)">Port</span>
+          <input id="vlc-port" type="number" value="8080" min="1" max="65535"
+            style="width:56px;font-size:9px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:var(--text);padding:2px 5px">
+          <span style="font-size:9px;color:var(--text-m)">Mot de passe</span>
+          <div style="position:relative;display:flex;align-items:center">
+            <input id="vlc-password" type="password" placeholder="(vide)"
+              style="width:80px;font-size:9px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:var(--text);padding:2px 20px 2px 5px">
+            <button id="btn-vlc-show" title="Afficher/masquer" tabindex="-1"
+              style="position:absolute;right:2px;background:none;border:none;cursor:pointer;color:var(--text-m);font-size:9px;padding:0;line-height:1">👁</button>
+          </div>
+          <button class="pill-btn" id="btn-vlc-save" style="font-size:9px;padding:2px 8px">✓ Sauver</button>
+          <button class="pill-btn" id="btn-vlc-test" style="font-size:9px;padding:2px 8px;background:rgba(110,180,200,0.15);color:#6eb4c8;border-color:rgba(110,180,200,0.3)">🔌 Tester</button>
+        </div>
+        <div id="vlc-config-status" style="font-size:8px;color:var(--text-m)"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="resize-handle">⌟</div>
+</div>
+
+<script src="renderer.js"></script>
+</body>
+</html>
