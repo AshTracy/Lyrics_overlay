@@ -1,0 +1,35 @@
+{
+    "name": "lyrics-overlay",
+    "version": "2.0.0",
+    "description": "Always-on-top lyrics overlay for desktop",
+    "main": "src/main/index.js",
+    "scripts": {
+        "start": "electron .",
+        "dev": "electron . --dev"
+    },
+    "dependencies": {
+        "better-sqlite3": "^12.6.2",
+        "music-metadata": "^11.12.3",
+        "node-fetch": "^3.3.2"
+    },
+    "devDependencies": {
+        "@electron/rebuild": "^4.0.3",
+        "electron": "^34.5.8"
+    },
+    "build": {
+        "appId": "com.yourname.lyrics-overlay",
+        "productName": "Lyrics Overlay",
+        "directories": {
+            "output": "dist"
+        },
+        "mac": {
+            "category": "public.app-category.music"
+        },
+        "win": {
+            "target": "nsis"
+        },
+        "linux": {
+            "target": "AppImage"
+        }
+    }
+}
