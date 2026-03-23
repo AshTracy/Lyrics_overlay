@@ -5,264 +5,391 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Lyrics Overlay</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
 
-    /* ── Thèmes (Phase 5) ──────────────────────────────────────────────────── */
     :root {
-      --bg:          rgba(10, 10, 14, 0.85);
-      --bg-hover:    rgba(255,255,255,0.04);
-      --accent:      #c8a96e;
-      --accent-dim:  rgba(200,169,110,0.22);
-      --accent-glow: rgba(200,169,110,0.08);
-      --text-h:      #f0ece4;
-      --text-m:      rgba(240,236,228,0.55);
-      --text-l:      rgba(240,236,228,0.28);
-      --border:      rgba(255,255,255,0.07);
-      --border-m:    rgba(255,255,255,0.12);
-      --radius:      14px;
-      --font-ui:     'DM Sans', sans-serif;
-      --font-lyrics: 'DM Serif Display', Georgia, serif;
-      --font-mono:   'JetBrains Mono', monospace;
-    }
-    [data-theme="light"] {
-      --bg:         rgba(248, 246, 241, 0.92);
-      --bg-hover:   rgba(0,0,0,0.04);
-      --accent:     #9a6f2e;
-      --accent-dim: rgba(154,111,46,0.15);
-      --text-h:     #1a1814;
-      --text-m:     rgba(26,24,20,0.55);
-      --text-l:     rgba(26,24,20,0.28);
-      --border:     rgba(0,0,0,0.08);
-      --border-m:   rgba(0,0,0,0.14);
-    }
-    [data-theme="minimal"] {
-      --bg:         rgba(0, 0, 0, 0.55);
-      --accent:     #ffffff;
-      --accent-dim: rgba(255,255,255,0.12);
-      --text-h:     #ffffff;
-      --text-m:     rgba(255,255,255,0.5);
-      --text-l:     rgba(255,255,255,0.22);
-      --border:     rgba(255,255,255,0.06);
+      /* Constantes — jamais changées par les thèmes */
+      --c-purple:  #835D8D;
+      --c-cyan:    #38E8FF;
+      --c-lav:     #DFE6FF;
+      --r:         18px;
+      --ui:        'Plus Jakarta Sans', sans-serif;
+      --lyr:       'Playfair Display', Georgia, serif;
+      --mono:      'JetBrains Mono', monospace;
+      --font-size:     18px;
+      --beat-duration: 0.6s;   /* updated dynamically from BPM */
     }
 
-    html, body { width:100%; height:100%; background:transparent; overflow:hidden;
-                 -webkit-app-region:no-drag; user-select:none; }
-
-    /* ── App shell ─────────────────────────────────────────────────────────── */
+    /* ── Thème sombre (défaut) ── */
     #app {
-      width:100%; height:100%; display:flex; flex-direction:column;
-      background:var(--bg); border:1px solid var(--border);
-      border-radius:var(--radius);
-      backdrop-filter:blur(28px) saturate(160%);
-      -webkit-backdrop-filter:blur(28px) saturate(160%);
-      overflow:hidden; transition:background 0.35s;
-      position:relative;
+      --bg:       rgba(7, 5, 16, 0.82);
+      --bg-glass: rgba(16, 12, 32, 0.92);
+      --accent:   #38E8FF;
+      --a-dim:    rgba(56,232,255,0.12);
+      --p-dim:    rgba(131,93,141,0.18);
+      --text:     #DFE6FF;
+      --text-mid: rgba(223,230,255,0.45);
+      --text-low: rgba(223,230,255,0.18);
+      --line:     rgba(56,232,255,0.08);
     }
 
-    /* ── Titlebar ──────────────────────────────────────────────────────────── */
+    /* ── Thème clair ── */
+    #app[data-theme="light"] {
+      --bg:       rgba(236, 232, 248, 0.94);
+      --bg-glass: rgba(220, 215, 240, 0.97);
+      --accent:   #6B21A8;
+      --a-dim:    rgba(107,33,168,0.10);
+      --p-dim:    rgba(131,93,141,0.12);
+      --text:     #1a1228;
+      --text-mid: rgba(26,18,40,0.5);
+      --text-low: rgba(26,18,40,0.22);
+      --line:     rgba(131,93,141,0.12);
+    }
+
+    /* ── Thème minimal ── */
+    #app[data-theme="minimal"] {
+      --bg:       rgba(0,0,0,0.65);
+      --bg-glass: rgba(5,5,10,0.88);
+      --accent:   #38E8FF;
+      --a-dim:    rgba(56,232,255,0.08);
+      --p-dim:    rgba(255,255,255,0.06);
+      --text:     #ffffff;
+      --text-mid: rgba(255,255,255,0.4);
+      --text-low: rgba(255,255,255,0.15);
+      --line:     rgba(255,255,255,0.06);
+    }
+
+    html, body {
+      width:100%; height:100%;
+      background:transparent; overflow:hidden;
+      -webkit-app-region:no-drag; user-select:none;
+    }
+
+    /* ── Shell ────────────────────────────────────────────────────────────────── */
+    #app {
+      width:100%; height:100%;
+      display:flex; flex-direction:column;
+      background:var(--bg);
+      border-radius:var(--r);
+      border:1px solid rgba(131,93,141,0.15);
+      backdrop-filter:blur(40px) saturate(200%);
+      -webkit-backdrop-filter:blur(40px) saturate(200%);
+      overflow:hidden;
+      position:relative;
+      box-shadow:
+        0 0 0 1px rgba(56,232,255,0.04) inset,
+        0 1px 0 rgba(223,230,255,0.05) inset,
+        0 20px 60px rgba(0,0,0,0.6),
+        0 0 80px rgba(56,232,255,0.03);
+    }
+
+    /* Top accent line */
+    #app::before {
+      content:''; position:absolute; top:0; left:20%; right:20%; height:1px;
+      background:linear-gradient(90deg,
+        transparent 0%,
+        rgba(131,93,141,0.5) 30%,
+        rgba(56,232,255,0.8) 50%,
+        rgba(131,93,141,0.5) 70%,
+        transparent 100%);
+      pointer-events:none; z-index:10;
+    }
+
+    /* ── Titlebar ────────────────────────────────────────────────────────────── */
     #titlebar {
       display:flex; align-items:center; gap:6px;
-      padding:7px 10px 5px; cursor:grab; flex-shrink:0;
+      padding:9px 11px 7px;
+      -webkit-app-region:drag;
+      flex-shrink:0;
+      /* Fade controls until hover */
+      --ctrl-opacity: 0;
+      transition:--ctrl-opacity 0.2s;
     }
-    #titlebar:active { cursor:grabbing; }
+    #titlebar:hover { --ctrl-opacity: 1; }
+    #titlebar button { -webkit-app-region:no-drag; }
 
     #cover {
-      width:28px; height:28px; border-radius:5px; flex-shrink:0;
-      background:var(--accent-dim); object-fit:cover; overflow:hidden;
-      display:flex; align-items:center; justify-content:center;
-      font-size:13px; color:var(--text-m);
+      width:26px; height:26px; border-radius:6px; flex-shrink:0;
+      background:var(--p-dim);
+      border:1px solid rgba(131,93,141,0.2);
+      overflow:hidden; display:flex; align-items:center; justify-content:center;
+      font-size:12px; color:var(--text-mid);
+      -webkit-app-region:no-drag;
+      transition:border-color 0.3s;
     }
     #cover img { width:100%; height:100%; object-fit:cover; border-radius:5px; }
+    #cover.has-art { border-color:rgba(56,232,255,0.2); }
 
     #track-info { flex:1; min-width:0; }
     #track-title {
-      font-family:var(--font-ui); font-weight:500; font-size:11px;
-      color:var(--text-h); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      font-family:var(--ui); font-weight:500; font-size:11px;
+      color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      letter-spacing:0.01em; line-height:1.3;
     }
     #track-artist {
-      font-family:var(--font-ui); font-weight:300; font-size:10px;
-      color:var(--text-m); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      font-family:var(--ui); font-weight:300; font-size:10px;
+      color:var(--text-mid); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+
+    /* Controls fade in on hover */
+    .ctrl-grp {
+      display:flex; gap:2px; align-items:center;
+      opacity:var(--ctrl-opacity, 0);
+      transition:opacity 0.2s;
+      -webkit-app-region:no-drag;
     }
 
     .ctrl-btn {
-      width:22px; height:22px; border-radius:50%; background:transparent; border:none;
-      color:var(--text-m); cursor:pointer; display:flex; align-items:center; justify-content:center;
-      font-size:11px; transition:color 0.15s, background 0.15s; flex-shrink:0;
+      width:22px; height:22px; border-radius:6px;
+      background:transparent; border:none;
+      color:var(--text-mid); cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      font-size:10px; transition:color 0.15s, background 0.15s;
+      flex-shrink:0;
     }
-    .ctrl-btn:hover { color:var(--text-h); background:var(--bg-hover); }
+    .ctrl-btn:hover { color:var(--text); background:rgba(223,230,255,0.06); }
     .ctrl-btn.active { color:var(--accent); }
 
     #source-badge {
-      font-family:var(--font-ui); font-size:9px; font-weight:500;
+      font-family:var(--ui); font-size:8px; font-weight:600;
       padding:2px 6px; border-radius:20px;
-      background:var(--accent-dim); color:var(--accent);
-      letter-spacing:0.05em; flex-shrink:0; text-transform:uppercase;
-      transition:background 0.3s, color 0.3s;
+      letter-spacing:0.08em; flex-shrink:0; text-transform:uppercase;
+      background:var(--p-dim); color:var(--c-purple);
+      border:1px solid rgba(131,93,141,0.2);
+      transition:all 0.3s;
+      -webkit-app-region:no-drag;
+      opacity:var(--ctrl-opacity, 0);
     }
-    #source-badge.system { background:rgba(110,180,200,0.2); color:#6eb4c8; }
+    #source-badge.system {
+      background:var(--a-dim); color:var(--c-cyan);
+      border-color:rgba(56,232,255,0.2);
+    }
+    #source-badge[style*="display:none"] { display:none !important; }
 
-    /* ── Barre de progression ──────────────────────────────────────────────── */
-    #progress-bar { height:2px; background:var(--border); flex-shrink:0; position:relative; cursor:pointer; }
-    #progress-fill { height:100%; background:var(--accent); width:0%; transition:width 0.1s linear; }
+    /* ── Progress ────────────────────────────────────────────────────────────── */
+    #progress-bar {
+      height:1px;
+      background:rgba(131,93,141,0.12);
+      flex-shrink:0; position:relative; cursor:pointer;
+    }
+    #progress-fill {
+      height:100%;
+      background:linear-gradient(90deg, rgba(131,93,141,0.7), var(--c-cyan));
+      width:0%; transition:width 0.1s linear;
+    }
 
-    /* ── Zone paroles ──────────────────────────────────────────────────────── */
+    /* ── Lyrics ──────────────────────────────────────────────────────────────── */
     #lyrics-zone {
-      flex:1; overflow:hidden; padding:6px 18px 10px;
-      display:none; flex-direction:column; justify-content:center; gap:3px;
+      flex:1; overflow:hidden; padding:5px 16px 8px;
+      display:none; flex-direction:column; justify-content:center; gap:4px;
     }
     #lyrics-zone.visible { display:flex; }
 
+    /* ── Lyric lines ─────────────────────────────────────────────────────────── */
+    #lyrics-zone {
+      transition: opacity 0.12s ease;
+    }
+    #lyrics-zone.transitioning {
+      opacity: 0;
+      transition: none;
+    }
+
     .lyric-line {
-      font-family:var(--font-lyrics); font-size:var(--font-size, 18px);
-      line-height:1.35; color:var(--text-l);
-      transition:color 0.3s, font-size 0.2s, transform 0.2s, opacity 0.3s;
+      font-family:var(--lyr);
+      font-size:var(--font-size);
+      line-height:1.5;
+      color:var(--text-low);
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-      cursor:pointer; border-radius:4px; padding:0 4px;
-      transform:translateY(0); opacity:0.4;
+      cursor:pointer; padding:3px 8px; border-radius:6px;
+      opacity:0.25;
+      transition:
+        opacity   0.3s cubic-bezier(0.4,0,0.2,1),
+        color     0.3s cubic-bezier(0.4,0,0.2,1),
+        font-size 0.3s cubic-bezier(0.4,0,0.2,1);
     }
-    .lyric-line:hover { background:var(--bg-hover); }
+
+    /* Active line — wraps up to 2 lines */
     .lyric-line.active {
-      color:var(--text-h); opacity:1;
-      font-style:italic; transform:translateY(0);
+      white-space:normal;
+      overflow:hidden;
+      display:-webkit-box;
+      -webkit-box-orient:vertical;
+      -webkit-line-clamp:2;
+      color:var(--text);
+      opacity:1;
+      font-style:italic;
+      font-size:calc(var(--font-size) + 2px);
     }
-    .lyric-line.next { color:var(--text-m); opacity:0.7; }
 
-    /* Taille active légèrement plus grande */
-    .lyric-line.active { font-size:calc(var(--font-size, 18px) + 3px); }
+    .lyric-line.next {
+      color:var(--text-mid);
+      opacity:0.45;
+    }
 
-    /* ── Status paroles ─────────────────────────────────────────────────────── */
+    .lyric-line:not(.active):hover {
+      opacity:0.6;
+    }
+
+    /* ── Status ──────────────────────────────────────────────────────────────── */
     #lyrics-status {
-      font-family:var(--font-ui); font-size:10px; color:var(--text-m);
-      padding:3px 18px; text-align:center; display:none; flex-shrink:0;
+      font-family:var(--ui); font-size:9px; color:var(--text-mid);
+      padding:2px 16px; text-align:center; display:none; flex-shrink:0;
+      opacity:0.7;
     }
     #lyrics-status.visible { display:block; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .spinner { display:inline-block; animation:spin 1s linear infinite; }
 
-    /* ── État vide ──────────────────────────────────────────────────────────── */
+    /* ── Empty state ─────────────────────────────────────────────────────────── */
     #empty-state {
       flex:1; display:flex; flex-direction:column;
-      align-items:center; justify-content:center; gap:8px; padding:16px;
+      align-items:center; justify-content:center; gap:9px; padding:16px;
     }
-    #empty-icon { font-size:26px; opacity:0.3; }
+    #empty-icon { font-size:22px; opacity:0.18; filter:grayscale(0.5); }
     #empty-text {
-      font-family:var(--font-ui); font-size:11px;
-      color:var(--text-m); text-align:center; line-height:1.6;
+      font-family:var(--ui); font-weight:300; font-size:11px;
+      color:var(--text-mid); text-align:center; line-height:1.65;
     }
-    .pill-btn {
-      font-family:var(--font-ui); font-size:10px; font-weight:500;
-      padding:5px 14px; border-radius:20px;
-      background:var(--accent-dim); color:var(--accent);
-      border:1px solid rgba(200,169,110,0.25); cursor:pointer;
-      transition:background 0.15s; letter-spacing:0.04em;
-    }
-    .pill-btn:hover { background:rgba(200,169,110,0.35); }
 
-    /* ── Panneau paramètres (Phase 5) ───────────────────────────────────────── */
-    #settings-panel {
-      display:none; flex-direction:column; gap:0;
-      background:var(--bg); border-top:1px solid var(--border);
-      max-height:220px; overflow-y:auto; flex-shrink:0;
+    /* ── Pill buttons ────────────────────────────────────────────────────────── */
+    .pill-btn {
+      font-family:var(--ui); font-size:10px; font-weight:500;
+      padding:4px 12px; border-radius:20px;
+      background:rgba(56,232,255,0.08); color:rgba(56,232,255,0.8);
+      border:1px solid rgba(56,232,255,0.15); cursor:pointer;
+      transition:all 0.15s; letter-spacing:0.02em;
     }
-    #settings-panel.open { display:flex; }
+    .pill-btn:hover {
+      background:rgba(56,232,255,0.14);
+      border-color:rgba(56,232,255,0.28);
+      color:var(--c-cyan);
+    }
+
+    /* ── Settings — floating overlay, does not push content ─────────────────── */
+    #settings-panel {
+      display:none; flex-direction:column;
+      background:var(--bg-glass);
+      border-top:1px solid rgba(131,93,141,0.15);
+      max-height:260px; overflow-y:auto; flex-shrink:0;
+    }
+    #settings-panel.open {
+      display:flex;
+    }
+    #settings-panel::-webkit-scrollbar { width:2px; }
+    #settings-panel::-webkit-scrollbar-thumb {
+      background:rgba(56,232,255,0.15); border-radius:2px;
+    }
 
     .settings-section {
-      padding:8px 12px 6px;
-      border-bottom:1px solid var(--border);
+      padding:7px 11px 6px;
+      border-bottom:1px solid rgba(131,93,141,0.08);
     }
     .settings-section:last-child { border-bottom:none; }
+
     .settings-title {
-      font-family:var(--font-ui); font-size:9px; font-weight:500;
-      color:var(--text-m); text-transform:uppercase; letter-spacing:0.08em;
-      margin-bottom:6px;
+      font-family:var(--ui); font-size:8px; font-weight:600;
+      color:rgba(56,232,255,0.5); text-transform:uppercase;
+      letter-spacing:0.14em; margin-bottom:6px;
     }
+
     .setting-row {
-      display:flex; align-items:center; gap:8px; margin-bottom:5px;
+      display:flex; align-items:center; gap:7px; margin-bottom:4px;
     }
     .setting-row label {
-      font-family:var(--font-ui); font-size:10px; color:var(--text-m);
-      flex:1; white-space:nowrap;
+      font-family:var(--ui); font-size:10px; color:var(--text-mid);
+      flex:1; white-space:nowrap; font-weight:300;
     }
     .setting-row input[type=range] {
-      flex:2; height:3px; accent-color:var(--accent); cursor:pointer;
+      flex:2; height:2px; accent-color:var(--accent); cursor:pointer;
     }
-    .setting-row input[type=range]::-webkit-slider-thumb { cursor:pointer; }
     .setting-row span.val {
-      font-family:var(--font-mono); font-size:9px; color:var(--text-m);
+      font-family:var(--mono); font-size:9px; color:var(--text-mid);
       min-width:28px; text-align:right;
     }
 
-    /* Boutons thème */
-    .theme-btns { display:flex; gap:4px; }
+    .theme-btns { display:flex; gap:3px; }
     .theme-btn {
-      font-family:var(--font-ui); font-size:9px; font-weight:500;
-      padding:3px 8px; border-radius:10px; border:1px solid var(--border-m);
-      background:transparent; color:var(--text-m); cursor:pointer; transition:all 0.15s;
+      font-family:var(--ui); font-size:9px; font-weight:500;
+      padding:2px 8px; border-radius:10px;
+      border:1px solid rgba(131,93,141,0.2);
+      background:transparent; color:var(--text-mid); cursor:pointer;
+      transition:all 0.15s;
     }
-    .theme-btn.active { background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
+    .theme-btn.active {
+      background:rgba(56,232,255,0.1); color:var(--c-cyan);
+      border-color:rgba(56,232,255,0.25);
+    }
 
-    /* ── Offset synchro (Phase 4) ───────────────────────────────────────────── */
     #offset-display {
-      font-family:var(--font-mono); font-size:9px; color:var(--accent);
-      min-width:40px; text-align:right;
+      font-family:var(--mono); font-size:9px;
+      color:rgba(56,232,255,0.7); min-width:40px; text-align:right;
     }
 
-    /* ── Resize handle ──────────────────────────────────────────────────────── */
+    .settings-section input[type=number],
+    .settings-section input[type=text],
+    .settings-section input[type=password] {
+      background:rgba(56,232,255,0.04);
+      border:1px solid rgba(131,93,141,0.2);
+      border-radius:5px; color:var(--text);
+      padding:2px 6px; font-size:9px;
+      font-family:var(--mono);
+      transition:border-color 0.15s;
+    }
+    .settings-section input:focus {
+      outline:none; border-color:rgba(56,232,255,0.3);
+    }
+    .settings-section input[type=checkbox] {
+      accent-color:var(--accent); cursor:pointer;
+    }
+
+    /* ── Resize ──────────────────────────────────────────────────────────────── */
     #resize-handle {
       position:absolute; bottom:3px; right:4px;
-      width:11px; height:11px; cursor:nwse-resize;
-      opacity:0.25; font-size:9px; color:var(--text-m);
+      width:12px; height:12px; cursor:nwse-resize;
+      color:var(--text-low); font-size:9px;
       display:flex; align-items:center; justify-content:center;
+      opacity:0; transition:opacity 0.2s;
     }
-
-    /* ── Spinner fetch ──────────────────────────────────────────────────────── */
-    @keyframes spin { to { transform:rotate(360deg); } }
-    .spinner { display:inline-block; animation:spin 0.9s linear infinite; }
-
-    /* ── Karaoké : ligne active animée ─────────────────────────────────────── */
-    @keyframes lyricPulse { 0%,100%{opacity:1} 50%{opacity:0.85} }
-    .lyric-line.active.playing { animation:lyricPulse 2s ease-in-out infinite; }
+    #app:hover #resize-handle { opacity:0.4; }
+    #resize-handle:hover { opacity:0.9 !important; color:var(--c-cyan); }
   </style>
 </head>
 <body>
 <div id="app" data-theme="dark">
 
-  <!-- Titlebar -->
   <div id="titlebar">
     <div id="cover">♪</div>
     <div id="track-info">
       <div id="track-title">Lyrics Overlay</div>
-      <div id="track-artist">Aucun morceau</div>
+      <div id="track-artist">Aucun morceau détecté</div>
     </div>
     <span id="source-badge" style="display:none">LOCAL</span>
-    <button class="ctrl-btn" id="btn-open"     title="Ouvrir fichier">📂</button>
-    <button class="ctrl-btn" id="btn-play"     title="Play/Pause" style="display:none">▶</button>
-    <button class="ctrl-btn" id="btn-release"  title="Revenir à la détection système" style="display:none">⏏</button>
-    <button class="ctrl-btn" id="btn-settings" title="Paramètres">⚙</button>
-    <button class="ctrl-btn" id="btn-close"    title="Masquer">✕</button>
+    <div class="ctrl-grp">
+      <button class="ctrl-btn" id="btn-open"     title="Ouvrir fichier">📂</button>
+      <button class="ctrl-btn" id="btn-play"     title="Play/Pause" style="display:none">▶</button>
+      <button class="ctrl-btn" id="btn-release"  title="Revenir détection système" style="display:none">⏏</button>
+      <button class="ctrl-btn" id="btn-settings" title="Paramètres">⚙</button>
+      <button class="ctrl-btn" id="btn-close"    title="Masquer">✕</button>
+    </div>
   </div>
 
-  <!-- Progress -->
   <div id="progress-bar"><div id="progress-fill"></div></div>
-
-  <!-- Status paroles -->
   <div id="lyrics-status"></div>
 
-  <!-- Paroles -->
   <div id="lyrics-zone">
-    <div class="lyric-line" id="line-prev" data-idx="-1"></div>
+    <div class="lyric-line"        id="line-prev" data-idx="-1"></div>
     <div class="lyric-line active" id="line-curr" data-idx="0">♪</div>
     <div class="lyric-line next"   id="line-next" data-idx="1"></div>
   </div>
 
-  <!-- Empty state -->
   <div id="empty-state">
     <div id="empty-icon">🎵</div>
-    <div id="empty-text">Ouvrez un fichier audio local<br>ou lancez Spotify / Apple Music</div>
+    <div id="empty-text">Ouvrez un fichier audio<br>ou lancez Spotify / VLC</div>
     <button class="pill-btn" id="open-btn">Ouvrir un fichier</button>
   </div>
 
-  <!-- Paramètres (Phase 5) -->
   <div id="settings-panel">
 
     <div class="settings-section">
@@ -277,12 +404,12 @@
       </div>
       <div class="setting-row">
         <label>Opacité</label>
-        <input type="range" id="sl-opacity"  min="20" max="100" value="85">
+        <input type="range" id="sl-opacity" min="20" max="100" value="85">
         <span class="val" id="vl-opacity">85%</span>
       </div>
       <div class="setting-row">
         <label>Police</label>
-        <input type="range" id="sl-fontsize" min="12" max="32"  value="18">
+        <input type="range" id="sl-fontsize" min="12" max="32" value="18">
         <span class="val" id="vl-fontsize">18</span>
       </div>
     </div>
@@ -296,8 +423,8 @@
       </div>
       <div class="setting-row">
         <label>Lignes visibles</label>
-        <div style="display:flex;gap:4px">
-          <button class="theme-btn" data-lines="1">1</button>
+        <div style="display:flex;gap:3px">
+          <button class="theme-btn"        data-lines="1">1</button>
           <button class="theme-btn active" data-lines="3">3</button>
         </div>
       </div>
@@ -313,51 +440,49 @@
         <label>Afficher pochette</label>
         <input type="checkbox" id="cb-cover" checked>
       </div>
-      <div class="setting-row" style="margin-top:6px">
-        <button class="pill-btn" id="btn-clear-cache" style="font-size:9px;padding:3px 10px">
-          Vider le cache paroles
-        </button>
-        <span id="cache-stats" style="font-family:var(--font-mono);font-size:9px;color:var(--text-m);margin-left:6px"></span>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-title">Cache .lrc</div>
+      <div class="setting-row">
+        <button class="pill-btn" id="btn-clear-cache" style="font-size:9px;padding:2px 9px">Vider</button>
+        <span id="cache-stats" style="font-family:var(--mono);font-size:9px;color:var(--text-mid)"></span>
       </div>
-      <div class="setting-row" style="margin-top:4px;flex-direction:column;align-items:flex-start;gap:4px">
-        <div style="font-size:9px;color:var(--text-m);margin-bottom:2px">Dossier fichiers .lrc :</div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
-          <button class="pill-btn" id="btn-open-lrc-folder" style="font-size:9px;padding:3px 10px">
-            📁 Ouvrir
-          </button>
-          <button class="pill-btn" id="btn-choose-lrc-folder" style="font-size:9px;padding:3px 10px">
-            📂 Changer…
-          </button>
-          <button class="pill-btn" id="btn-reset-lrc-folder" style="font-size:9px;padding:3px 10px">
-            ↩ Défaut
-          </button>
+      <div class="setting-row" style="gap:4px;flex-wrap:wrap;margin-top:2px">
+        <button class="pill-btn" id="btn-open-lrc-folder"   style="font-size:9px;padding:2px 8px">📁 Ouvrir</button>
+        <button class="pill-btn" id="btn-choose-lrc-folder" style="font-size:9px;padding:2px 8px">📂 Changer</button>
+        <button class="pill-btn" id="btn-reset-lrc-folder"  style="font-size:9px;padding:2px 8px">↩ Défaut</button>
+      </div>
+      <div id="lrc-folder-path" style="font-family:var(--mono);font-size:8px;color:var(--text-mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;margin-top:3px"></div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-title">Interface HTTP VLC</div>
+      <div class="setting-row" style="flex-wrap:wrap;gap:5px">
+        <span style="font-size:9px;color:var(--text-mid)">Port</span>
+        <input id="vlc-port" type="number" value="8080" min="1" max="65535" style="width:54px">
+        <span style="font-size:9px;color:var(--text-mid)">Mdp</span>
+        <div style="position:relative;display:flex;align-items:center">
+          <input id="vlc-password" type="password" placeholder="vide" style="width:75px;padding-right:18px">
+          <button id="btn-vlc-show" tabindex="-1"
+            style="position:absolute;right:2px;background:none;border:none;cursor:pointer;color:var(--text-mid);font-size:9px;padding:0">👁</button>
         </div>
-        <div id="lrc-folder-path" style="font-family:var(--font-mono);font-size:8px;color:var(--text-m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;cursor:default"></div>
+        <button class="pill-btn" id="btn-vlc-save" style="font-size:9px;padding:2px 8px">✓</button>
+        <button class="pill-btn" id="btn-vlc-test" style="font-size:9px;padding:2px 8px;background:var(--p-dim);color:var(--c-purple);border-color:rgba(131,93,141,0.25)">🔌</button>
       </div>
-      <div class="setting-row" style="margin-top:4px">
-        <button class="pill-btn" id="btn-diagnose" style="font-size:9px;padding:3px 10px;background:rgba(110,180,200,0.15);color:#6eb4c8;border-color:rgba(110,180,200,0.3)">
+      <div id="vlc-config-status" style="font-size:8px;color:var(--text-mid);margin-top:2px"></div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-title">Diagnostic</div>
+      <div class="setting-row">
+        <button class="pill-btn" id="btn-diagnose"
+          style="font-size:9px;padding:2px 9px;background:var(--p-dim);color:var(--c-purple);border-color:rgba(131,93,141,0.25)">
           🔍 Tester la détection
         </button>
       </div>
-      <div class="setting-row" style="margin-top:6px;flex-direction:column;align-items:flex-start;gap:4px">
-        <div style="font-size:9px;color:var(--text-m)">Interface HTTP VLC :</div>
-        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-          <span style="font-size:9px;color:var(--text-m)">Port</span>
-          <input id="vlc-port" type="number" value="8080" min="1" max="65535"
-            style="width:56px;font-size:9px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:var(--text);padding:2px 5px">
-          <span style="font-size:9px;color:var(--text-m)">Mot de passe</span>
-          <div style="position:relative;display:flex;align-items:center">
-            <input id="vlc-password" type="password" placeholder="(vide)"
-              style="width:80px;font-size:9px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:var(--text);padding:2px 20px 2px 5px">
-            <button id="btn-vlc-show" title="Afficher/masquer" tabindex="-1"
-              style="position:absolute;right:2px;background:none;border:none;cursor:pointer;color:var(--text-m);font-size:9px;padding:0;line-height:1">👁</button>
-          </div>
-          <button class="pill-btn" id="btn-vlc-save" style="font-size:9px;padding:2px 8px">✓ Sauver</button>
-          <button class="pill-btn" id="btn-vlc-test" style="font-size:9px;padding:2px 8px;background:rgba(110,180,200,0.15);color:#6eb4c8;border-color:rgba(110,180,200,0.3)">🔌 Tester</button>
-        </div>
-        <div id="vlc-config-status" style="font-size:8px;color:var(--text-m)"></div>
-      </div>
     </div>
+
   </div>
 
   <div id="resize-handle">⌟</div>

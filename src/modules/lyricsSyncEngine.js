@@ -73,7 +73,9 @@ class LyricsSyncEngine {
   }
 
   _updateInternal(positionSecs, force) {
-    if (!this.lines.length) return
+    if (!this.lines.length) {
+      return
+    }
 
     const effectivePos = positionSecs + this.offset
 

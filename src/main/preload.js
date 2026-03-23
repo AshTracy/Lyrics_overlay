@@ -5,7 +5,8 @@ const ALLOWED_CHANNELS = [
   'track-ended',  'system-track-changed', 'volume-changed',
   'lyrics-loaded', 'lyrics-update', 'lyrics-status', 'lyrics-cleared',
   'settings-loaded', 'cache-cleared', 'error', 'track-released',
-  'fetch-lyrics-request', 'system-playback-state', 'system-seek'
+  'fetch-lyrics-request', 'system-playback-state', 'system-seek',
+  'vlc-auth-error'
 ]
 
 contextBridge.exposeInMainWorld('electronAPI', {

@@ -1,13 +1,17 @@
 const { app, BrowserWindow, ipcMain, globalShortcut, Tray, Menu, dialog, nativeImage, shell } = require('electron')
 const path = require('path')
 
+// Attraper toutes les erreurs non gérées pour diagnostiquer les crashs silencieux
+process.on('uncaughtException',  (err) => { console.error('[CRASH]', err) })
+process.on('unhandledRejection', (err) => { console.error('[CRASH async]', err) })
+
 // Supprimer les erreurs DevTools "Autofill.enable / setAddresses wasn't found"
 app.commandLine.appendSwitch('disable-features', 'AutofillServerCommunication,AutofillEnableAccountStorageForAccounts')
 app.commandLine.appendSwitch('disable-blink-features', 'AutofillEnableToolbarStatusChip')
 
 const LocalFilePlayer  = require('../modules/localFilePlayer')
 const SystemDetector   = require('../modules/systemDetector')
-const { fetchLyrics, clearCache, getCacheStats } = require('../modules/lyricsFetcher')
+const { clearCache, getCacheStats } = require('../modules/lyricsFetcher')
 const LyricsSyncEngine = require('../modules/lyricsSyncEngine')
 const SettingsStore    = require('../modules/settingsStore')
 const lrcCache         = require('../modules/lrcCache')
@@ -54,7 +58,7 @@ function createOverlayWindow() {
 
   overlayWindow.on('moved',   saveWindowBounds)
   overlayWindow.on('resized', saveWindowBounds)
-  overlayWindow.on('closed',  () => { overlayWindow = null })
+  overlayWindow.on('closed',  () => { overlayWindow = null; app.quit() })
 
   overlayWindow.webContents.on('did-finish-load', () => {
     sendToOverlay('settings-loaded', settings.getAll())
@@ -316,6 +320,7 @@ try {
       case 'seek':          localPlayer?.seek(value); break
       case 'volume':        localPlayer?.setVolume(value); break
       case 'sync-position': syncEngine?.update(value); break
+      case 'quit':          app.quit(); return { ok: true }
       case 'release':
         // Libère la source locale → le polling système reprend
         localPlayer?.releaseFile()
@@ -358,7 +363,6 @@ let pendingTrack  = null   // dernier track détecté avant que le renderer soit
 function sendToOverlay(channel, data) {
   if (channel === 'system-position') {
     if (localPlayer?.hasFile()) return
-    console.log(`[sendToOverlay] system-position pos=${data.position?.toFixed(2)} lines=${syncEngine?.lines?.length}`)
     syncEngine?.update(data.position)
     return
   }
@@ -400,8 +404,9 @@ app.whenReady().then(async () => {
   systemDetector = new SystemDetector(sendToOverlay)
   syncEngine     = new LyricsSyncEngine(sendToOverlay)
 
-  // Restaurer l'offset de synchro
-  syncEngine.setOffset(settings.get('syncOffset', 0))
+  // Forcer l'offset à 0 — les anciennes versions sauvegardaient en ms au lieu de secondes
+  settings.set('syncOffset', 0)
+  syncEngine.setOffset(0)
 
   // Restaurer la config VLC HTTP
   const vlcCfg = settings.get('vlcHttp', {})
@@ -439,4 +444,8 @@ app.on('will-quit', () => {
   localPlayer?.destroy()
 })
 
-app.on('window-all-closed', () => {}) // Tray app — ne pas quitter
+app.on('window-all-closed', () => {
+  // Sur macOS, l'app continue dans le dock même sans fenêtre
+  // Sur Windows/Linux, quitter quand toutes les fenêtres sont fermées
+  if (process.platform !== 'darwin') app.quit()
+})

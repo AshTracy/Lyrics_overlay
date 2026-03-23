@@ -40,11 +40,9 @@ class SystemDetector {
     if (this.platform === 'win32') {
       this._smtcAvailable = await this._smtcBridge.start()
       if (this._smtcAvailable) {
-        console.log('[Detector] Bridge Python SMTC actif — détection améliorée')
         // Le bridge pousse les états toutes les 1s — on les écoute
         this._smtcBridge.onState((state) => this._onSmtcState(state))
       } else {
-        console.log('[Detector] Bridge Python indisponible — fallback PowerShell')
       }
     }
 
@@ -280,7 +278,6 @@ Write-Output "NONE"
     if (!this._isPlaying)    { return }
     if (this._posTimer === null) { return }
     const estimated = this._interpolatedPos()
-    console.log(`[Tick] pos=${estimated.toFixed(2)} posAtPoll=${this._posAtPoll.toFixed(2)} track=${this._currentTrack?.title}`)
     this.sendToOverlay('system-position', { position: estimated })
   }
 
@@ -532,22 +529,37 @@ try {
         headers: { Authorization: `Basic ${auth}` },
         timeout: 2000
       }, (res) => {
+        if (res.statusCode === 401) { resolve({ authError: true }); return }
         if (res.statusCode !== 200) { resolve(null); return }
         let data = ''
         res.on('data', d => data += d)
         res.on('end', () => {
           try {
             const json = JSON.parse(data)
+            // Extraire artiste et titre depuis les métadonnées VLC
+            const meta     = json.information?.category?.meta || {}
+            const filename = meta.filename || ''
+            let vlcArtist  = meta.artist || ''
+            let vlcTitle   = meta.title  || ''
+            // Fallback : splitter le nom de fichier si pas de métadonnées
+            if (!vlcTitle && filename) {
+              const base = filename.replace(/\.[^.]+$/, '')
+              const idx  = base.indexOf(' - ')
+              if (idx > 0) { vlcArtist = base.substring(0, idx).trim(); vlcTitle = base.substring(idx + 3).trim() }
+              else { vlcTitle = base }
+            }
             resolve({
               isOpen:    true,
               isPlaying: json.state === 'playing',
               isPaused:  json.state === 'paused',
               isStopped: json.state === 'stopped',
               playing:   json.state === 'playing',
-              position:  json.time     ?? 0,   // position en secondes
-              length:    json.length   ?? 0,   // durée totale en secondes
+              position:  json.time     ?? 0,
+              length:    json.length   ?? 0,
               percent:   (json.position ?? 0) * 100,
-              filename:  json.information?.category?.meta?.filename ?? '',
+              filename,
+              artist:    vlcArtist,
+              title:     vlcTitle,
               available: true
             })
           } catch (_) { resolve(null) }
@@ -577,6 +589,14 @@ try {
           // HTTP non disponible — arrêter le monitor, laisser _poll gérer
           this._stopVlcMonitor()
           this._vlcTicking = false
+          return
+        }
+
+        if (status.authError) {
+          // Mauvais mot de passe — envoyer un message à l'overlay
+          this.sendToOverlay('vlc-auth-error', {})
+          this._vlcTicking = false
+          if (this._vlcMonitorActive) setTimeout(tick, 5000) // réessayer dans 5s
           return
         }
 

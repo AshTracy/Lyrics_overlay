@@ -9,6 +9,7 @@
 const { spawn }  = require('child_process')
 const path        = require('path')
 const fs          = require('fs')
+const { app }     = require('electron')
 
 class SmtcBridge {
   constructor() {
@@ -21,10 +22,23 @@ class SmtcBridge {
   }
 
   // Chercher le vrai exécutable Python (évite les alias Microsoft Store)
+  // Priorité 1 : Python embarqué dans l'installateur (resources/python/)
   static async findPython() {
     const { execFile, exec } = require('child_process')
 
     if (process.platform === 'win32') {
+      // 0. Python embarqué — copié dans resources/python/ par electron-builder
+      const bundledPaths = []
+      if (app?.isPackaged && process.resourcesPath) {
+        bundledPaths.push(path.join(process.resourcesPath, 'python', 'python.exe'))
+      }
+      // En mode dev, chercher dans le dossier bundled-python/ à la racine du projet
+      bundledPaths.push(path.join(__dirname, '..', '..', 'bundled-python', 'python.exe'))
+      bundledPaths.push(path.join(__dirname, '..', '..', '..', 'bundled-python', 'python.exe'))
+      for (const p of bundledPaths) {
+        if (p && fs.existsSync(p)) return p
+      }
+
       // 1. Essayer `py` (Python Launcher for Windows) — toujours un vrai binaire
       const pyLauncher = await new Promise(resolve => {
         execFile('py', ['--version'], { timeout: 3000, windowsHide: true }, (err, stdout, stderr) => {
@@ -38,7 +52,6 @@ class SmtcBridge {
       const wherePath = await new Promise(resolve => {
         exec('where python', { timeout: 3000, windowsHide: true }, (err, stdout) => {
           if (err || !stdout) { resolve(null); return }
-          // where.exe peut retourner plusieurs lignes — prendre la première qui n'est pas WindowsApps
           const lines = stdout.trim().split('\n').map(l => l.trim()).filter(Boolean)
           const real  = lines.find(l => !l.toLowerCase().includes('windowsapps'))
           resolve(real || null)
@@ -88,9 +101,19 @@ class SmtcBridge {
     if (this._proc) return Promise.resolve(true)
 
     return new Promise(async (resolve) => {
-      const scriptPath = path.join(__dirname, 'smtc_bridge.py')
+      // En mode packagé (electron-builder), le script est dans process.resourcesPath
+      // En mode dev, il est dans src/modules/
+      const scriptPath = app?.isPackaged
+        ? path.join(process.resourcesPath, 'smtc_bridge.py')
+        : path.join(__dirname, 'smtc_bridge.py')
 
-      if (!fs.existsSync(scriptPath)) {
+      // Tenter les deux emplacements si le premier n'existe pas
+      const scriptPathFallback = path.join(__dirname, 'smtc_bridge.py')
+      const resolvedScript = fs.existsSync(scriptPath)
+        ? scriptPath
+        : fs.existsSync(scriptPathFallback) ? scriptPathFallback : null
+
+      if (!resolvedScript) {
         console.warn('[SmtcBridge] smtc_bridge.py introuvable')
         this._available = false
         resolve(false)
@@ -105,11 +128,10 @@ class SmtcBridge {
         return
       }
 
-      console.log(`[SmtcBridge] Python trouvé : ${pythonCmd}`)
 
       let proc
       try {
-        proc = spawn(pythonCmd, [scriptPath], {
+        proc = spawn(pythonCmd, [resolvedScript], {
           stdio:       ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
         })
@@ -138,7 +160,6 @@ class SmtcBridge {
             if (state.ready) {
               this._ready     = true
               this._available = true
-              console.log('[SmtcBridge] Prêt')
               resolve(true)
               continue
             }

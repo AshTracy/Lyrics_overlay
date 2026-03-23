@@ -4,9 +4,18 @@
  * Envoie la position toutes les ~100ms au renderer via sendToOverlay
  */
 
-const { parseFile } = require('music-metadata')
 const path = require('path')
-const fs = require('fs')
+const fs   = require('fs')
+
+// music-metadata v10+ est ESM-only — utiliser import() dynamique
+let _parseFile = null
+async function getParseFile() {
+  if (!_parseFile) {
+    const mm = await import('music-metadata')
+    _parseFile = mm.parseFile
+  }
+  return _parseFile
+}
 
 class LocalFilePlayer {
   constructor(sendToOverlay) {
@@ -30,6 +39,7 @@ class LocalFilePlayer {
     this.filePath = filePath
 
     // Extraire les métadonnées avec music-metadata
+    const parseFile = await getParseFile()
     const raw = await parseFile(filePath, { duration: true, skipPostHeaders: true })
     const tags = raw.common || {}
 

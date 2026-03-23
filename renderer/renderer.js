@@ -38,30 +38,14 @@ const elLineNext    = $('line-next')
 const elSettings    = $('settings-panel')
 const elOpenBtn     = $('open-btn')
 
-// ─── Phase 1 : Drag ───────────────────────────────────────────────────────────
-{
-  const titlebar = $('titlebar')
-  let drag = false, sx = 0, sy = 0
-  titlebar.addEventListener('mousedown', e => {
-    if (e.target.closest('button,input,select')) return
-    drag = true; sx = e.screenX; sy = e.screenY; e.preventDefault()
-  })
-  document.addEventListener('mousemove', e => {
-    if (!drag) return
-    api.dragWindow(e.screenX - sx, e.screenY - sy)
-    sx = e.screenX; sy = e.screenY
-  })
-  document.addEventListener('mouseup', () => { drag = false })
-}
-
 // ─── Phase 1 : Resize ─────────────────────────────────────────────────────────
+// Drag is handled natively via -webkit-app-region:drag in CSS — no JS needed.
 {
   const handle = $('resize-handle')
   let resizing = false, sx = 0, sy = 0, sw = 0, sh = 0
 
   handle.addEventListener('mousedown', async e => {
     e.preventDefault(); e.stopPropagation()
-    // Récupérer la taille réelle de la fenêtre Electron (pas innerWidth qui est figé)
     const size = await api.getWindowSize()
     sw = size.width; sh = size.height
     sx = e.screenX; sy = e.screenY
@@ -91,8 +75,10 @@ function createAudio(filePath) {
   return audioEl
 }
 
+
+
 // ─── Contrôles basiques ───────────────────────────────────────────────────────
-elBtnClose.addEventListener('click', () => window.close())
+elBtnClose.addEventListener('click', () => api.playerCommand('quit'))
 elBtnOpen.addEventListener('click', () => api.openFileDialog())
 
 // Bouton ⏏ : relâche la source locale, le polling Spotify reprend
@@ -143,8 +129,6 @@ elProgress.addEventListener('click', e => {
 // ─── Phase 5 : Paramètres ─────────────────────────────────────────────────────
 elBtnSettings.addEventListener('click', () => {
   const isOpen = elSettings.classList.toggle('open')
-  // Rendre la fenêtre focusable quand les settings sont ouverts
-  // (nécessaire pour taper dans les champs texte)
   api.setFocusable(isOpen)
 })
 
@@ -661,15 +645,22 @@ api.on('lyrics-status', data => {
 
 // ─── Phase 4 : Mise à jour de la ligne active ─────────────────────────────────
 
+let _lyricsTransitioning = false
+
 api.on('lyrics-update', data => {
   if (!data) return
+
+  const prevIdx = parseInt(elLineCurr.dataset.idx ?? '-999')
+  const newIdx  = data.curr?.idx ?? -1
+  const changed = newIdx !== prevIdx
 
   if (data.prev) {
     elLinePrev.textContent = data.prev.text
     elLinePrev.dataset.idx = data.prev.idx
     elLinePrev.className   = 'lyric-line'
   } else {
-    elLinePrev.textContent = ''; elLinePrev.className = 'lyric-line'
+    elLinePrev.textContent = ''
+    elLinePrev.className   = 'lyric-line'
   }
 
   if (data.curr) {
@@ -677,7 +668,8 @@ api.on('lyrics-update', data => {
     elLineCurr.dataset.idx = data.curr.idx
     elLineCurr.className   = 'lyric-line active' + (state.playing ? ' playing' : '')
   } else {
-    elLineCurr.textContent = '♪'; elLineCurr.className = 'lyric-line active'
+    elLineCurr.textContent = '♪'
+    elLineCurr.className   = 'lyric-line active'
   }
 
   if (data.next) {
@@ -685,12 +677,34 @@ api.on('lyrics-update', data => {
     elLineNext.dataset.idx = data.next.idx
     elLineNext.className   = 'lyric-line next'
   } else {
-    elLineNext.textContent = ''; elLineNext.className = 'lyric-line'
+    elLineNext.textContent = ''
+    elLineNext.className   = 'lyric-line'
+  }
+
+  // Fade-in only on line change — content is already updated above
+  if (changed && !_lyricsTransitioning) {
+    _lyricsTransitioning = true
+    elLyricsZone.classList.add('transitioning')
+    requestAnimationFrame(() => {
+      elLyricsZone.classList.remove('transitioning')
+      setTimeout(() => { _lyricsTransitioning = false }, 300)
+    })
   }
 })
 
 api.on('lyrics-cleared', () => resetLyricLines())
 api.on('error', data => { showStatus(`⚠ ${data.message}`, 5000) })
+
+// Set beat animation speed from estimated BPM
+api.on('lyrics-loaded', data => {
+  if (data?.bpm) {
+    const beatSec = (60 / data.bpm).toFixed(3)
+    document.documentElement.style.setProperty('--beat-duration', `${beatSec}s`)
+  }
+})
+api.on('vlc-auth-error', () => {
+  showStatus('🔒 VLC : mot de passe requis — ouvrez ⚙ Paramètres › Interface HTTP VLC', 8000)
+})
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
